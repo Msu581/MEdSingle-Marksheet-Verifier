@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grade Sheet Checker — MSU</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<style>
+:root{
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --blue:#083D44; --blue2:#0B5A5E; --mid:#08807B; --mid-soft:#DCF2EF;
+  --paper:#EAF3F2; --card:#FFFFFF; --surface2:#F5FAF9;
+  --ink:#10201F; --ink2:#2E4644; --muted:#587170;
+  --line:#D4E6E3; --line-strong:#B8D4D0;
+  --green:#DCF0E6; --greenInk:#0F6B49;
+  --red:#FBE3E1; --redInk:#A32B26;
+  --amber:#FBEECF; --amberInk:#8A5A12;
+  --r-sm:8px; --r-md:12px; --r-lg:18px;
+  --sh-2:0 2px 4px rgba(8,61,68,.05),0 8px 20px -8px rgba(8,61,68,.14);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--paper);line-height:1.5;font-size:15px}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+header h1{margin:0;font-size:28px;color:var(--blue);letter-spacing:-.01em}
+header p{margin:6px 0 0;color:var(--muted);max-width:760px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-2);padding:20px;margin-top:20px}
+.card h2{margin:0 0 12px;font-size:16px;color:var(--blue2);text-transform:uppercase;letter-spacing:.06em}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 24px;margin:0;padding:0;list-style:none;color:var(--ink2);font-size:14px}
+.rules li::before{content:"✓ ";color:var(--mid);font-weight:700}
+.opts{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.opts b{color:var(--ink2)}
+.opts label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.hint{color:var(--muted);font-size:13px}
+#drop{border:2px dashed var(--line-strong);border-radius:var(--r-lg);background:var(--surface2);padding:34px 20px;text-align:center;transition:.15s}
+#drop.over{border-color:var(--mid);background:var(--mid-soft)}
+#drop .big{font-size:18px;font-weight:600;color:var(--blue)}
+#drop .small{color:var(--muted);margin:4px 0 16px}
+button{font:inherit;cursor:pointer;border-radius:var(--r-sm);border:1px solid var(--line-strong);background:#fff;color:var(--blue);padding:9px 16px;font-weight:600}
+button:hover{background:var(--mid-soft)}
+button.primary{background:var(--blue2);color:#fff;border-color:var(--blue2)}
+button.primary:hover{background:var(--blue)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.filebar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:16px}
+#fileinfo{color:var(--ink2)}
+#fileinfo b{color:var(--blue)}
+#filelist{margin:10px 0 0;max-height:130px;overflow:auto;font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--surface2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px;display:none}
+.progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:14px;display:none}
+.progress>i{display:block;height:100%;width:0;background:var(--mid);transition:width .1s}
+#ptext{font-size:13px;color:var(--muted);margin-top:6px;display:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.stat{border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;background:var(--surface2)}
+.stat b{display:block;font-size:30px;line-height:1.1;color:var(--blue)}
+.stat span{color:var(--muted);font-size:13px}
+.stat.bad b{color:var(--redInk)} .stat.good b{color:var(--greenInk)} .stat.warn b{color:var(--amberInk)}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0 10px}
+.toolbar input[type=search]{font:inherit;padding:8px 12px;border:1px solid var(--line-strong);border-radius:var(--r-sm);min-width:230px}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:var(--r-sm);overflow:hidden}
+.seg button{border:0;border-radius:0;border-right:1px solid var(--line-strong);padding:8px 14px}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--blue2);color:#fff}
+.spacer{flex:1}
+table{border-collapse:collapse;width:100%}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--surface2);position:sticky;top:0}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:var(--r-md);max-height:70vh}
+tr.main{cursor:pointer}
+tr.main:hover td{background:var(--surface2)}
+tr.main td:first-child::before{content:"▸ ";color:var(--muted)}
+tr.main.open td:first-child::before{content:"▾ "}
+.tag{display:inline-block;border-radius:99px;padding:2px 10px;font-size:12px;font-weight:700;border:1px solid transparent}
+.tag.ok{background:var(--green);color:var(--greenInk)}
+.tag.bad{background:var(--red);color:var(--redInk)}
+.tag.warn{background:var(--amber);color:var(--amberInk)}
+.mono{font-family:var(--mono);font-size:13px}
+td.det{background:#fbfdfd;padding:14px 18px}
+.det h3{margin:12px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--blue2)}
+.det h3:first-child{margin-top:0}
+.det table{font-size:13.5px;background:#fff}
+.det td.bad,.det td.badcell{background:var(--red);color:var(--redInk);font-weight:700}
+.det td .exp{display:block;font-weight:500;font-size:11.5px;color:var(--redInk)}
+.det td.okcell{color:var(--greenInk)}
+.det tr.failrow td:first-child{box-shadow:inset 3px 0 var(--amberInk)}
+.note{color:var(--muted);font-size:12.5px}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+.foot{margin-top:30px;color:var(--muted);font-size:12.5px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Grade Sheet Checker</h1>
+  <p>Drop one, a few, or hundreds of semester grade-sheet PDFs. Every subject row and every total is recomputed from the marks and compared with what is printed, then you can download the whole report as Excel.</p>
+</header>
+
+<section class="card">
+  <h2>What is checked</h2>
+  <ul class="rules">
+    <li><b>Grade</b> matches the marks (grade scale)</li>
+    <li><b>Grade Points</b> match the grade for those marks</li>
+    <li><b>Credit Points</b> = Credits × Grade Points</li>
+    <li><b>Credits</b> per course = T + P + PR; total T-P-PR and <b>Total Credits</b></li>
+    <li><b>Total Marks</b> = sum of subject marks</li>
+    <li><b>Total Credit Points</b> = sum of the Credit Points column</li>
+    <li><b>Maximum Marks</b> = number of subjects × 100</li>
+    <li><b>Percentage</b> = total marks ÷ maximum marks × 100</li>
+    <li><b>Grand Total Credit Points</b> = Total Credits × 10</li>
+    <li><b>SGPA</b> = Σ(Credits × Grade Points) ÷ Total Credits</li>
+  </ul>
+  <p class="note" style="margin:12px 0 0">Calculations use exact fractions and ROUND_HALF_UP to the number of decimals printed on the sheet — no floating-point drift.</p>
+</section>
+
+<section class="card">
+  <h2>1 · Add PDFs</h2>
+  <div class="opts">
+    <b>Grade scale:</b>
+    <label><input type="radio" name="scale" value="auto" checked> Auto-detect per PDF</label>
+    <label><input type="radio" name="scale" value="old"> Old</label>
+    <label><input type="radio" name="scale" value="new"> New</label>
+    <span class="hint">Old: O 99–100 · A+ 90–98 · A 80–89 · B+ 70–79 · B 60–69 · C 50–59 · P 40–49 · F &lt;40 &nbsp;|&nbsp; New: O 90–100 · A+ 80–89 · A 70–79 · B+ 60–69 · B 50–59 · C 45–49 · P 40–44 · F &lt;40</span>
+  </div>
+  <div id="drop">
+    <div class="big">Drag &amp; drop PDF files or a whole folder here</div>
+    <div class="small">Sub-folders are scanned too. Only .pdf files are used.</div>
+    <div class="btns">
+      <button id="btnFolder" type="button">📁 Select folder</button>
+      <button id="btnPdf" type="button">📄 Select PDF file(s)</button>
+    </div>
+  </div>
+  <input id="pickFolder" type="file" webkitdirectory directory multiple hidden>
+  <input id="pickPdf" type="file" accept="application/pdf,.pdf" multiple hidden>
+  <div class="filebar">
+    <div id="fileinfo">No PDFs added yet.</div>
+    <div class="btns">
+      <button id="btnClear" type="button" disabled>Clear</button>
+      <button id="btnRun" type="button" class="primary" disabled>Run check</button>
+    </div>
+  </div>
+  <div id="filelist"></div>
+  <div class="progress" id="pbar"><i></i></div>
+  <div id="ptext"></div>
+</section>
+
+<section class="card" id="results" style="display:none">
+  <h2>2 · Results</h2>
+  <div class="stats" id="stats"></div>
+  <div class="toolbar">
+    <div class="seg" id="filter">
+      <button data-f="all" class="on">All</button>
+      <button data-f="MISMATCH">Mismatches</button>
+      <button data-f="OK">All correct</button>
+      <button data-f="UNREADABLE">Unreadable</button>
+    </div>
+    <input type="search" id="search" placeholder="Search name, reg. no. or file…">
+    <span class="spacer"></span>
+    <button id="btnXlsx" type="button" class="primary">⬇ Download Excel report</button>
+  </div>
+  <div class="tablewrap"><table id="tbl"><thead><tr>
+    <th>Student</th><th>Registration No.</th><th>Programme · Specialization</th><th>Semester</th><th>Scale</th><th>Status</th><th>Mismatches</th><th>File</th>
+  </tr></thead><tbody id="tbody"></tbody></table></div>
+  <p class="note">Click a row to see every subject and total, with the correct value shown under each wrong cell.</p>
+</section>
+
+<div class="foot">Medhavi Skills University · Grade Sheet Checker · exact-fraction arithmetic, ROUND_HALF_UP</div>
+</div>
+
+<script>
+"use strict";
+/*CORE-START*/
+/* ══════════ exact arithmetic (rational numbers on BigInt) ══════════ */
+const gcd=(a,b)=>{a=a<0n?-a:a;b=b<0n?-b:b;while(b){const t=a%b;a=b;b=t;}return a;};
+class Rat{
+  constructor(n,d=1n){
+    if(d===0n) throw new Error('division by zero');
+    if(d<0n){n=-n;d=-d;}
+    const g=gcd(n,d)||1n; this.n=n/g; this.d=d/g;
+  }
+  static parse(x){
+    const s=String(x).trim();
+    if(!/^-?\d+(\.\d+)?$/.test(s)) throw new Error(`not a number: "${x}"`);
+    const neg=s[0]==='-', body=neg?s.slice(1):s;
+    const [i,f='']=body.split('.');
+    return new Rat(BigInt(i+f)*(neg?-1n:1n), 10n**BigInt(f.length));
+  }
+  add(o){return new Rat(this.n*o.d+o.n*this.d,this.d*o.d);}
+  sub(o){return new Rat(this.n*o.d-o.n*this.d,this.d*o.d);}
+  mul(o){return new Rat(this.n*o.n,this.d*o.d);}
+  div(o){return new Rat(this.n*o.d,this.d*o.n);}
+  eq(o){return this.n===o.n&&this.d===o.d;}
+  gte(o){return this.n*o.d>=o.n*this.d;}
+  isZero(){return this.n===0n;}
+  scaledHalfUp(p){
+    const sc=10n**BigInt(p), num=this.n*sc, den=this.d;
+    const neg=num<0n, a=neg?-num:num;
+    const q=(2n*a+den)/(2n*den);
+    return neg?-q:q;
+  }
+  toFixed(p){
+    const q=this.scaledHalfUp(p), neg=q<0n;
+    const s=(neg?-q:q).toString().padStart(p+1,'0'), cut=s.length-p;
+    return (neg?'-':'')+(p?`${s.slice(0,cut)}.${s.slice(cut)}`:s);
+  }
+}
+const decimalsOf=s=>{const p=String(s).trim().split('.');return p.length>1?p[1].length:0;};
+function exactDecimal(r){            // exact terminating decimal when possible
+  let d=r.d,twos=0,fives=0;
+  while(d%2n===0n){d/=2n;twos++;}
+  while(d%5n===0n){d/=5n;fives++;}
+  return d===1n?r.toFixed(Math.max(twos,fives)):`${r.n}/${r.d}`;
+}
+const isNum=s=>/^-?\d+(\.\d+)?$/.test(String(s).trim());
+const RZERO=new Rat(0n);
+
+/* ══════════ grade scales: [grade, grade points, lowest marks] ══════════ */
+const SCALES={
+  old:[['O',10,99],['A+',9,90],['A',8,80],['B+',7,70],['B',6,60],['C',5,50],['P',4,40],['F',0,null]],
+  new:[['O',10,90],['A+',9,80],['A',8,70],['B+',7,60],['B',6,50],['C',5,45],['P',4,40],['F',0,null]]
+};
+const MAX_POINT=10;                  // top grade point; Grand Total Credit Points = Total Credits × 10
+function gradeFor(marks,scale){      // marks: Rat -> {g, p}
+  for(const [g,p,lo] of SCALES[scale]){
+    if(lo===null||marks.gte(new Rat(BigInt(lo)))) return {g,p};
+  }
+  return {g:'F',p:0};
+}
+
+/* ══════════ parsing one PDF's text into grade sheets ══════════ */
+const LABELS="Father's Name|Mother's Name|Date of Birth|Aadhaar No\\.|ABC ID|SCHOOL OF|Category|Programme|Specialization|Registration No\\.|Year Of Admission|Course Code";
+function field(text,label){
+  const re=new RegExp(label+"\\s*:\\s*(.*?)(?=\\s+(?:"+LABELS+")(?=[\\s:]|$)|$)","i");
+  const m=text.match(re); return m?m[1].trim():'';
+}
+function parseSheets(raw){
+  const parts=String(raw).replace(/\r/g,'').split(/(?=Name of Student\s*:)/i).filter(p=>/Name of Student\s*:/i.test(p));
+  return parts.map(part=>{
+    const text=part.replace(/\s+/g,' ').trim();
+    const warnings=[];
+    const header={
+      name:field(text,'Name of Student'), reg:(field(text,'Registration No\\.')||'').split(' ')[0],
+      programme:field(text,'Programme'), specialization:field(text,'Specialization'),
+      semester:field(text,'Semester'), year:field(text,'Year Of Admission'), category:field(text,'Category')
+    };
+    // table region: after the column headings, up to the Total row
+    // The column headings can be laid out in any order (the PDF reader may interleave them with
+    // the two-column header block), so the table starts at the word "Course" and rows are found by their shape.
+    const tm=text.match(/\bTotal\s+(\d+)-(\d+)-(\d+)\s+(\S+)\s+(\S+)/);
+    const cm=text.match(/\bCourse\b/);
+    const start=cm?cm.index:0;
+    const end=tm&&tm.index>=start?tm.index:text.length;
+    const region=text.slice(start,end);
+    let total=null;
+    if(tm) total={tpp:`${tm[1]}-${tm[2]}-${tm[3]}`,marks:tm[4],cp:tm[5]};
+    else warnings.push('Total row not found');
+    const rowRe=/\b([A-Z]{2,6}\d{2,4}[A-Z]?)\s+(.+?)\s+(\d+)-(\d+)-(\d+)\s+(\d+(?:\.\d+)?|AB|ABS)\s+([A-Z]{1,2}\+?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)(?=\s|$)/g;
+    const ms=[...region.matchAll(rowRe)];
+    const rows=ms.map((m,i)=>{
+      const next=i+1<ms.length?ms[i+1].index:region.length;
+      const leftover=region.slice(m.index+m[0].length,next).trim();
+      return {code:m[1],name:(m[2]+(leftover?' '+leftover:'')).trim(),
+        t:+m[3],p:+m[4],pr:+m[5],tpp:`${m[3]}-${m[4]}-${m[5]}`,
+        marks:m[6],grade:m[7],gp:m[8],cp:m[9]};
+    });
+    if(!rows.length) warnings.push('No subject rows could be read');
+    const codeCount=(region.match(/(?:^|\s)[A-Z]{2,6}\d{3}[A-Z]?(?=\s)/g)||[]).length;
+    if(rows.length&&codeCount!==rows.length) warnings.push(`Read ${rows.length} subject rows but found ${codeCount} course codes — check this PDF manually`);
+    const fm=text.match(/Maximum Marks\s*:\s*(\S+)\s+Percentage of Marks\s*:\s*(\S+)\s+Total Credits\s*:\s*(\S+)\s+Grand Total Credit Points\s*:\s*(\S+)\s+SGPA\s*:\s*(\S+)/i);
+    const footer=fm?{maxMarks:fm[1],percentage:fm[2],totalCredits:fm[3],grandCP:fm[4],sgpa:fm[5]}:null;
+    if(!fm) warnings.push('Footer (Maximum Marks … SGPA) not found');
+    return {header,rows,total,footer,warnings};
+  });
+}
+
+/* ══════════ checking one parsed sheet ══════════ */
+function checkSheet(sheet,mode='auto'){
+  const rows=sheet.rows;
+  const mk=r=>isNum(r.marks)?Rat.parse(r.marks):null;       // null = absent (AB)
+  let scale=mode;
+  if(mode==='auto'){
+    const score=k=>rows.filter(r=>{const m=mk(r);return m&&r.grade.toUpperCase()===gradeFor(m,k).g;}).length;
+    scale=score('new')>score('old')?'new':'old';
+  }
+  const issues=[]; const add=(ref,field,printed,expected,note='')=>issues.push({ref,field,printed:String(printed),expected:String(expected),note});
+  let sumCredits=RZERO,sumMarks=RZERO,sumPrintedCP=RZERO,sumExpCP=RZERO,sT=0,sP=0,sPR=0;
+  const out=rows.map(r=>{
+    const credits=new Rat(BigInt(r.t+r.p+r.pr));
+    const m=mk(r);
+    const exp=m?gradeFor(m,scale):{g:'F',p:0};
+    const expGP=new Rat(BigInt(exp.p));
+    const expCP=credits.mul(expGP);
+    const gradeOK=r.grade.toUpperCase()===exp.g||(!m&&r.grade.toUpperCase()==='AB');
+    const gpOK=isNum(r.gp)&&Rat.parse(r.gp).eq(expGP);
+    const cpOK=isNum(r.cp)&&Rat.parse(r.cp).eq(expCP);
+    const ref=r.code;
+    if(!gradeOK) add(ref,'Grade',r.grade,exp.g,`Marks ${r.marks} fall in grade ${exp.g} (${scale} scale)`);
+    if(!gpOK){
+      const pg=SCALES[scale].find(x=>x[0]===r.grade.toUpperCase());
+      add(ref,'Grade Points',r.gp,exp.p,`Grade ${exp.g} carries ${exp.p} points`+(pg&&String(pg[1])===r.gp?` (printed ${r.gp} fits the printed grade ${r.grade}, but not the marks)`:''));
+    }
+    if(!cpOK) add(ref,'Credit Points',r.cp,exactDecimal(expCP),`${exactDecimal(credits)} credits × ${exp.p} grade points`);
+    sumCredits=sumCredits.add(credits); if(m) sumMarks=sumMarks.add(m);
+    if(isNum(r.cp)) sumPrintedCP=sumPrintedCP.add(Rat.parse(r.cp));
+    sumExpCP=sumExpCP.add(expCP); sT+=r.t; sP+=r.p; sPR+=r.pr;
+    return {code:r.code,name:r.name,tpp:r.tpp,credits:exactDecimal(credits),marks:r.marks,grade:r.grade,gp:r.gp,cp:r.cp,
+      expGrade:exp.g,expGP:String(exp.p),expCP:exactDecimal(expCP),gradeOK,gpOK,cpOK,isFail:exp.g==='F'||r.grade.toUpperCase()==='F'||r.grade.toUpperCase()==='AB'};
+  });
+
+  const totals=[];
+  const addT=(key,label,printed,expected,note='')=>{
+    const ok=printed!==null&&printed!==undefined&&String(printed)===String(expected);
+    totals.push({key,label,printed:printed==null?null:String(printed),expected:String(expected),ok,note});
+    if(!ok) add('Totals',label,printed==null?'not found':printed,expected,note);
+  };
+  // compare a printed decimal with an exact value, rounded HALF_UP to the printed decimals
+  const addRat=(key,label,printed,exact,note='')=>{
+    if(printed==null||!isNum(printed)){ addT(key,label,printed==null?null:printed,exactDecimal(exact),note); return; }
+    const exp=exact.toFixed(decimalsOf(printed));
+    addT(key,label,printed,exp,note);
+  };
+  const tot=sheet.total, ft=sheet.footer;
+  const n=rows.length, nR=new Rat(BigInt(n));
+  addT('tpp','Total T-P-PR',tot?tot.tpp:null,`${sT}-${sP}-${sPR}`,'Sum of the T, P and PR columns');
+  addRat('credits','Total Credits',ft?ft.totalCredits:null,sumCredits,'Sum of T+P+PR over all courses');
+  addRat('marks','Total Marks',tot?tot.marks:null,sumMarks,'Sum of the Marks column');
+  addRat('cp','Total Credit Points',tot?tot.cp:null,sumPrintedCP,'Sum of the Credit Points column');
+  addRat('max','Maximum Marks',ft?ft.maxMarks:null,nR.mul(new Rat(100n)),`${n} subjects × 100`);
+  addRat('pct','Percentage of Marks',ft?ft.percentage:null,n?sumMarks.div(nR):RZERO,`${exactDecimal(sumMarks)} ÷ ${n*100} × 100`);
+  addRat('grand','Grand Total Credit Points',ft?ft.grandCP:null,sumCredits.mul(new Rat(BigInt(MAX_POINT))),`Total Credits ${exactDecimal(sumCredits)} × ${MAX_POINT}`);
+  addRat('sgpa','SGPA',ft?ft.sgpa:null,sumCredits.isZero()?RZERO:sumExpCP.div(sumCredits),`Σ(Credits × Grade Points from marks) ${exactDecimal(sumExpCP)} ÷ ${exactDecimal(sumCredits)} credits`);
+
+  const status=!rows.length?'UNREADABLE':(issues.length?'MISMATCH':'OK');
+  return {scale,rows:out,totals,issues,status,warnings:sheet.warnings||[]};
+}
+/*CORE-END*/
+
+/* ═══════════════════════ UI ═══════════════════════ */
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const $=s=>document.querySelector(s);
+const esc=v=>v==null?'':String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let FILES=[];            // File objects
+let RESULTS=[];          // {id,file,header,sheet,check,status}
+let FILTER='all';
+
+function addFiles(list){
+  const seen=new Set(FILES.map(f=>(f.webkitRelativePath||f.name)+'|'+f.size));
+  let added=0;
+  for(const f of list){
+    if(!/\.pdf$/i.test(f.name)) continue;
+    const k=(f.webkitRelativePath||f.name)+'|'+f.size;
+    if(seen.has(k)) continue; seen.add(k); FILES.push(f); added++;
+  }
+  renderFiles();
+}
+function renderFiles(){
+  const n=FILES.length;
+  $('#fileinfo').innerHTML=n?`<b>${n}</b> PDF${n===1?'':'s'} ready to check.`:'No PDFs added yet.';
+  $('#btnRun').disabled=!n; $('#btnClear').disabled=!n;
+  $('#btnRun').textContent=n?`Run check on ${n} PDF${n===1?'':'s'}`:'Run check';
+  const fl=$('#filelist');
+  if(n){ const show=FILES.slice(0,200).map(f=>esc(f.webkitRelativePath||f.name)).join('<br>');
+    fl.innerHTML=show+(n>200?`<br>… and ${n-200} more`:''); fl.style.display='block'; } else fl.style.display='none';
+}
+$('#btnFolder').onclick=()=>$('#pickFolder').click();
+$('#btnPdf').onclick=()=>$('#pickPdf').click();
+$('#pickFolder').onchange=e=>{addFiles([...e.target.files]);e.target.value='';};
+$('#pickPdf').onchange=e=>{addFiles([...e.target.files]);e.target.value='';};
+$('#btnClear').onclick=()=>{FILES=[];renderFiles();};
+
+/* drag & drop — files and folders (folders are walked recursively) */
+async function walk(entry){
+  if(entry.isFile) return new Promise(res=>entry.file(f=>res([f]),()=>res([])));
+  if(!entry.isDirectory) return [];
+  const reader=entry.createReader(); const all=[];
+  for(;;){
+    const batch=await new Promise(res=>reader.readEntries(res,()=>res([])));
+    if(!batch.length) break;
+    for(const c of batch) all.push(...await walk(c));
+  }
+  return all;
+}
+const dz=$('#drop');
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('over');}));
+dz.addEventListener('drop',async e=>{
+  const dt=e.dataTransfer;
+  const entries=dt.items?[...dt.items].map(i=>i.kind==='file'&&i.webkitGetAsEntry?i.webkitGetAsEntry():null):[];
+  const direct=[...dt.files];
+  let files=[];
+  if(entries.length&&entries.every(Boolean)){ for(const en of entries) files.push(...await walk(en)); }
+  else files=direct;
+  addFiles(files);
+});
+// stop the browser opening a PDF if it is dropped outside the box
+['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>e.preventDefault()));
+
+/* PDF -> text (lines rebuilt from item positions) */
+async function pdfText(file){
+  const buf=await file.arrayBuffer();
+  const doc=await pdfjsLib.getDocument({data:buf}).promise;
+  let out='';
+  try{
+    for(let p=1;p<=doc.numPages;p++){
+      const page=await doc.getPage(p);
+      const tc=await page.getTextContent();
+      const items=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>({s:i.str,x:i.transform[4],y:i.transform[5],w:i.width||0}));
+      items.sort((a,b)=>b.y-a.y||a.x-b.x);
+      const lines=[]; let cur=[],cy=null;
+      for(const it of items){
+        if(cy===null||Math.abs(it.y-cy)<=3){cur.push(it); if(cy===null)cy=it.y;}
+        else{lines.push(cur);cur=[it];cy=it.y;}
+      }
+      if(cur.length) lines.push(cur);
+      for(const ln of lines){
+        ln.sort((a,b)=>a.x-b.x);
+        let s='',end=null;
+        for(const it of ln){ s+=(end!==null&&it.x-end<1.5?'':' ')+it.s; end=it.x+it.w; }
+        out+=s.trim()+'\n';
+      }
+      out+='\n';
+    }
+  }finally{ doc.destroy&&doc.destroy(); }
+  return out;
+}
+
+$('#btnRun').onclick=async()=>{
+  const mode=document.querySelector('input[name=scale]:checked').value;
+  RESULTS=[]; let id=0;
+  $('#btnRun').disabled=true; $('#btnClear').disabled=true;
+  const bar=$('#pbar'),fill=bar.firstElementChild,pt=$('#ptext');
+  bar.style.display='block'; pt.style.display='block';
+  const total=FILES.length;
+  for(let i=0;i<total;i++){
+    const f=FILES[i], path=f.webkitRelativePath||f.name;
+    pt.textContent=`Checking ${i+1} of ${total}: ${path}`;
+    fill.style.width=(i/total*100)+'%';
+    await new Promise(r=>setTimeout(r,0));
+    try{
+      const text=await pdfText(f);
+      const sheets=parseSheets(text);
+      if(!sheets.length){
+        RESULTS.push({id:id++,file:path,header:{},check:null,status:'UNREADABLE',error:'No grade sheet found in this PDF (scanned image or different format?)'});
+      }else sheets.forEach(sh=>{
+        const c=checkSheet(sh,mode);
+        RESULTS.push({id:id++,file:path,header:sh.header,sheet:sh,check:c,status:c.status,error:c.status==='UNREADABLE'?(sh.warnings[0]||'No subject rows found'):''});
+      });
+    }catch(err){
+      RESULTS.push({id:id++,file:path,header:{},check:null,status:'UNREADABLE',error:'Could not read PDF: '+(err&&err.message||err)});
+    }
+  }
+  fill.style.width='100%'; pt.textContent=`Done — ${RESULTS.length} grade sheet(s) from ${total} PDF(s).`;
+  $('#btnRun').disabled=false; $('#btnClear').disabled=false;
+  renderResults();
+};
+
+function renderResults(){
+  $('#results').style.display='block';
+  const c=s=>RESULTS.filter(r=>r.status===s).length;
+  $('#stats').innerHTML=
+    `<div class="stat"><b>${RESULTS.length}</b><span>Grade sheets checked</span></div>`+
+    `<div class="stat good"><b>${c('OK')}</b><span>All correct</span></div>`+
+    `<div class="stat bad"><b>${c('MISMATCH')}</b><span>With mismatches</span></div>`+
+    `<div class="stat bad"><b>${RESULTS.reduce((a,r)=>a+(r.check?r.check.issues.length:0),0)}</b><span>Individual mismatches</span></div>`+
+    `<div class="stat warn"><b>${c('UNREADABLE')}</b><span>Unreadable</span></div>`;
+  renderTable();
+  $('#results').scrollIntoView({behavior:'smooth'});
+}
+const tagOf=s=>`<span class="tag ${s==='OK'?'ok':s==='MISMATCH'?'bad':'warn'}">${s==='OK'?'ALL CORRECT':s}</span>`;
+function renderTable(){
+  const q=$('#search').value.trim().toLowerCase();
+  const rows=RESULTS.filter(r=>(FILTER==='all'||r.status===FILTER)&&
+    (!q||[r.header.name,r.header.reg,r.file].some(v=>String(v||'').toLowerCase().includes(q))));
+  if(!rows.length){ $('#tbody').innerHTML='<tr><td colspan="8" class="empty">Nothing to show for this filter.</td></tr>'; return; }
+  $('#tbody').innerHTML=rows.map(r=>{
+    const h=r.header;
+    return `<tr class="main" data-id="${r.id}"><td>${esc(h.name||'—')}</td><td class="mono">${esc(h.reg||'—')}</td>
+      <td>${esc([h.programme,h.specialization].filter(Boolean).join(' · ')||'—')}</td><td>${esc(h.semester||'—')}</td>
+      <td>${r.check?esc(r.check.scale.toUpperCase()):'—'}</td><td>${tagOf(r.status)}</td>
+      <td>${r.check?r.check.issues.length:'—'}</td><td class="mono">${esc(r.file)}</td></tr>`;
+  }).join('');
+}
+$('#tbody').addEventListener('click',e=>{
+  const tr=e.target.closest('tr.main'); if(!tr) return;
+  const next=tr.nextElementSibling;
+  if(next&&next.classList.contains('detail')){ next.remove(); tr.classList.remove('open'); return; }
+  const r=RESULTS.find(x=>x.id===+tr.dataset.id);
+  const d=document.createElement('tr'); d.className='detail';
+  d.innerHTML=`<td colspan="8" class="det">${detailHTML(r)}</td>`;
+  tr.after(d); tr.classList.add('open');
+});
+function cell(val,ok,exp){
+  return ok?`<td class="okcell">${esc(val)}</td>`:`<td class="badcell">${esc(val)}<span class="exp">should be ${esc(exp)}</span></td>`;
+}
+function detailHTML(r){
+  if(!r.check) return `<p>${esc(r.error)}</p>`;
+  const c=r.check;
+  let h='';
+  if(c.warnings.length) h+=`<p class="note" style="color:var(--amberInk)">⚠ ${c.warnings.map(esc).join('<br>⚠ ')}</p>`;
+  h+=`<h3>Subjects (${esc(c.scale)} grade scale)</h3><table><thead><tr><th>Course Code</th><th>Course Name</th><th>Credits (T-P-PR)</th><th>Credits</th><th>Marks</th><th>Grade</th><th>Grade Points</th><th>Credit Points</th></tr></thead><tbody>`;
+  for(const x of c.rows)
+    h+=`<tr class="${x.isFail?'failrow':''}"><td class="mono">${esc(x.code)}</td><td>${esc(x.name)}</td><td>${esc(x.tpp)}</td><td>${esc(x.credits)}</td><td>${esc(x.marks)}</td>
+      ${cell(x.grade,x.gradeOK,x.expGrade)}${cell(x.gp,x.gpOK,x.expGP)}${cell(x.cp,x.cpOK,x.expCP)}</tr>`;
+  h+=`</tbody></table><h3>Totals</h3><table><thead><tr><th>Check</th><th>Printed</th><th>Correct value</th><th>Result</th><th>How</th></tr></thead><tbody>`;
+  for(const t of c.totals)
+    h+=`<tr><td>${esc(t.label)}</td><td class="${t.ok?'okcell':'badcell'}">${esc(t.printed==null?'not found':t.printed)}</td><td>${esc(t.expected)}</td><td>${t.ok?'<span class="tag ok">OK</span>':'<span class="tag bad">MISMATCH</span>'}</td><td class="note">${esc(t.note)}</td></tr>`;
+  return h+'</tbody></table>';
+}
+$('#filter').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  FILTER=b.dataset.f; [...$('#filter').children].forEach(x=>x.classList.toggle('on',x===b)); renderTable();
+});
+$('#search').addEventListener('input',renderTable);
+
+/* ═══════════════════════ Excel export ═══════════════════════ */
+$('#btnXlsx').onclick=async()=>{
+  if(typeof ExcelJS==='undefined'){alert('The Excel library could not be loaded (check your internet connection).');return;}
+  const wb=new ExcelJS.Workbook(); wb.creator='Grade Sheet Checker';
+  const fill=a=>({type:'pattern',pattern:'solid',fgColor:{argb:a}});
+  const RED=fill('FFFBE3E1'),GREEN=fill('FFDCF0E6'),AMBER=fill('FFFBEECF'),HEAD=fill('FF0B5A5E');
+  const style=ws=>{
+    ws.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}}; ws.getRow(1).fill=HEAD;
+    ws.getRow(1).alignment={vertical:'middle',wrapText:true}; ws.views=[{state:'frozen',ySplit:1}];
+    ws.columns.forEach(col=>{let w=10;col.eachCell({includeEmpty:false},c=>{const l=String(c.value==null?'':(c.value.richText?'':c.value)).length;if(l>w)w=l;});col.width=Math.min(w+2,60);});
+    ws.autoFilter={from:{row:1,column:1},to:{row:1,column:ws.columnCount}};
+  };
+  const num=v=>isNum(v)?Number(v):v;
+  const mark=(cellRef,ok)=>{cellRef.fill=ok?GREEN:RED; cellRef.font={color:{argb:ok?'FF0F6B49':'FFA32B26'},bold:!ok};};
+
+  /* Sheet 1 — Report: one row per grade sheet */
+  const rp=wb.addWorksheet('Report');
+  const keys=[['tpp','Total T-P-PR'],['credits','Total Credits'],['marks','Total Marks'],['cp','Total Credit Points'],['max','Maximum Marks'],['pct','Percentage of Marks'],['grand','Grand Total Credit Points'],['sgpa','SGPA']];
+  rp.addRow(['#','Student Name','Registration No.','Programme','Specialization','Semester','Grade Scale Used','Overall Status','No. of Mismatches','Subjects',...keys.map(k=>k[1]),'Mismatch Details','File']);
+  RESULTS.forEach((r,i)=>{
+    const h=r.header,c=r.check;
+    const row=rp.addRow([i+1,h.name||'',h.reg||'',h.programme||'',h.specialization||'',h.semester||'',c?c.scale.toUpperCase():'',
+      r.status==='OK'?'ALL CORRECT':r.status,c?c.issues.length:'',c?c.rows.length:'',
+      ...keys.map(k=>{const t=c&&c.totals.find(x=>x.key===k[0]);return t?(t.ok?'OK':'MISMATCH'):'';}),
+      c?c.issues.map(x=>`${x.ref}: ${x.field} printed ${x.printed}, should be ${x.expected}`).join('\n'):(r.error||''),r.file]);
+    mark(row.getCell(8),r.status==='OK'); if(r.status==='UNREADABLE') row.getCell(8).fill=AMBER;
+    keys.forEach((k,j)=>{const t=c&&c.totals.find(x=>x.key===k[0]); if(t) mark(row.getCell(11+j),t.ok);});
+    row.getCell(19).alignment={wrapText:true,vertical:'top'};
+  });
+  style(rp); rp.getColumn(19).width=70;
+
+  /* Sheet 2 — Mismatches: one row per individual mismatch */
+  const ms=wb.addWorksheet('Mismatches');
+  ms.addRow(['Student Name','Registration No.','Where','Course Name','Field','Printed in PDF','Correct Value','Explanation','File']);
+  RESULTS.forEach(r=>{ if(!r.check) return;
+    r.check.issues.forEach(x=>{
+      const crs=r.check.rows.find(y=>y.code===x.ref);
+      const row=ms.addRow([r.header.name||'',r.header.reg||'',x.ref,crs?crs.name:'',x.field,num(x.printed),num(x.expected),x.note,r.file]);
+      row.getCell(6).fill=RED; row.getCell(7).fill=GREEN;
+    });});
+  style(ms);
+
+  /* Sheet 3 — PDF Data: what is printed in each PDF, subject by subject */
+  const dt=wb.addWorksheet('PDF Data');
+  dt.addRow(['Student Name','Registration No.','Course Code','Course Name','Credits (T-P-PR)','Marks','Grade','Grade Points','Credit Points',
+    'Maximum Marks','Percentage of Marks','Total Credits','Grand Total Credit Points','SGPA','Row Check','Semester','Programme','Specialization','File']);
+  RESULTS.forEach(r=>{ if(!r.check||!r.sheet) return;
+    const f=r.sheet.footer||{};
+    r.check.rows.forEach(x=>{
+      const ok=x.gradeOK&&x.gpOK&&x.cpOK;
+      const row=dt.addRow([r.header.name||'',r.header.reg||'',x.code,x.name,x.tpp,num(x.marks),x.grade,num(x.gp),num(x.cp),
+        num(f.maxMarks),num(f.percentage),num(f.totalCredits),num(f.grandCP),num(f.sgpa),ok?'OK':'MISMATCH',r.header.semester||'',r.header.programme||'',r.header.specialization||'',r.file]);
+      if(!x.gradeOK) mark(row.getCell(7),false); if(!x.gpOK) mark(row.getCell(8),false); if(!x.cpOK) mark(row.getCell(9),false);
+      mark(row.getCell(15),ok);
+    });
+    const t=r.sheet.total||{};
+    const tr=dt.addRow([r.header.name||'',r.header.reg||'','TOTAL','',t.tpp||'',num(t.marks),'','',num(t.cp),num(f.maxMarks),num(f.percentage),num(f.totalCredits),num(f.grandCP),num(f.sgpa),'','','','',r.file]);
+    tr.font={bold:true}; tr.eachCell(c=>{if(!c.fill||!c.fill.fgColor)c.fill=fill('FFEDF6F5');});
+    ['tpp','marks','cp','max','pct','credits','grand','sgpa'].forEach(k=>{
+      const tt=r.check.totals.find(x=>x.key===k); if(!tt||tt.ok) return;
+      const col={tpp:5,marks:6,cp:9,max:10,pct:11,credits:12,grand:13,sgpa:14}[k]; mark(tr.getCell(col),false);
+    });
+  });
+  style(dt);
+
+  const buf=await wb.xlsx.writeBuffer();
+  const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const a=document.createElement('a'); a.href=url; a.download='grade_sheet_check_report.xlsx';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),2000);
+};
+</script>
+</body>
+</html>
